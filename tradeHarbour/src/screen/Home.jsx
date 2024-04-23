@@ -30,12 +30,12 @@ const Home = () => {
               </li>
               <li>
                 <Button asChild variant="link">
-                  <a href="https://github.com/aryan-parmar">Aditya Parikh</a>
+                  <a href="https://github.com/adityaparikh7">Aditya Parikh</a>
                 </Button>
               </li>
               <li>
                 <Button asChild variant="link">
-                  <a href="https://github.com/aryan-parmar">Madhav Patel</a>
+                  <a href="https://github.com/madhavpatl">Madhav Patel</a>
                 </Button>
               </li>
             </ul>
