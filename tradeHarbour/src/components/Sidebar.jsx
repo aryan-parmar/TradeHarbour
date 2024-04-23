@@ -7,8 +7,8 @@ let buttons = [
   { name: "Select Stock", link: "/add-csv" },
   { name: "View Stock", link: "/view-stock" },
   { name: "LSTM", link: "/lstm" },
-  { name: "BROWNIAN", link: "/brownian" },
   { name: "CNN", link: "/cnn" },
+  { name: "Black Scholes", link: "/black-scholes" },
   { name: "SIP Calculator", link: "/sip-calculator" },
 ];
 

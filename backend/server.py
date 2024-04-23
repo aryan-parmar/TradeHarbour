@@ -9,12 +9,16 @@ from tensorflow.keras.models import load_model
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 import numpy as np
+from scipy.stats import norm
 from arch import arch_model
 
 app = Flask(__name__)
 CORS(app)
 lstm_model_path = './models/lstm_model_adam.h5'
 lstm_model = load_model(lstm_model_path)
+
+cnn_model_path = './models/diluted_cnn.h5'
+cnn_model = load_model(cnn_model_path)
 
 
 def load_data(ticker, start_date, end_date):
@@ -47,41 +51,68 @@ def predict():
 
     if df.empty:
         return jsonify({"error": "No data available for the given ticker and date range."})
-
-    # X, y, scaler = prepare_data(df['Close'], look_back)
-    # predictions = lstm_model.predict(X)
-    # predictions_rescaled = scaler.inverse_transform(predictions)
-    # y_rescaled = scaler.inverse_transform(y.reshape(-1, 1))
-    # mse = mean_squared_error(y_rescaled, predictions_rescaled)
-    # mae = mean_absolute_error(y_rescaled, predictions_rescaled)
-    # r2 = r2_score(y_rescaled, predictions_rescaled)
-    # mape = mean_absolute_percentage_error(y_rescaled, predictions_rescaled)
-
-     # Convert Timestamp to string
-
-    # accuracy = 100-mape
-    # print(len(y_rescaled.flatten().tolist()), len(predictions_rescaled.flatten().tolist()), len(dates))
-    
-        # try:
-        #     stock_list.append([dates[i], x1[i], x2[i]])
-        # except:
-        #     stock_list.append([i-len(y_rescaled.flatten().tolist()), None, x2[i]])
-    # response = {
-    #     "ticker": ticker,
-    #     # "dates": dates,
-    #     # "actual_prices": y_rescaled.flatten().tolist(),
-    #     # "predicted_prices": predictions_rescaled.flatten().tolist(),
-    #     "stock_data": stock_list,
-    #     "mse": mse,
-    #     "mae": mae,
-    #     "r2": r2,
-    #     "mape": mape,
-    #     "accuracy": accuracy
-    # }
-    # return jsonify(response)
     future_days = 10
     X, y, scaler = prepare_data(df['Close'], look_back=100)
     predictions = lstm_model.predict(X)
+    predictions_rescaled = scaler.inverse_transform(predictions)
+    y_rescaled = scaler.inverse_transform(y.reshape(-1, 1))
+
+    dates = df.index[look_back:].tolist()  # List of dates corresponding to the predictions
+    dates = [date.strftime('%Y-%m-%d') for date in dates] 
+
+    mse = mean_squared_error(y_rescaled, predictions_rescaled)
+    mae = mean_absolute_error(y_rescaled, predictions_rescaled)
+    r2 = r2_score(y_rescaled, predictions_rescaled)
+    mape = mean_absolute_percentage_error(y_rescaled, predictions_rescaled)
+    accuracy = 100 - mape
+    last_batch = X[-1:].reshape(1, 100, -1)
+    future_predictions = []
+
+    stock_list = []
+    x1 = y_rescaled.flatten().tolist()
+    x2 = predictions_rescaled.flatten().tolist()
+    for i in range(len(x2)):
+        stock_list.append([dates[i], x1[i], x2[i]])
+
+    for _ in range(future_days):
+        current_pred = lstm_model.predict(last_batch)
+        current_pred_rescaled = scaler.inverse_transform(current_pred).flatten()[0]
+        future_predictions.append(float(current_pred_rescaled))  # Convert NumPy float to Python float
+        last_batch = np.append(last_batch[:, 1:, :], current_pred.reshape(1, 1, -1), axis=1)
+
+    final_dates = [pd.to_datetime(end_date) + timedelta(days=i+1) for i in range(future_days)]
+    final_dates_str = [date.strftime('%Y-%m-%d') for date in final_dates]
+    stock_l = [[date, None, pred] for date, pred in zip(final_dates_str, future_predictions)]
+    stock_list.extend(stock_l)
+    response = {
+        "ticker": ticker,
+        "stock_data": stock_list,
+        "mse": mse,
+        "mae": mae,
+        "r2": r2,
+        "mape": mape,
+        "accuracy": accuracy
+    }
+    return jsonify(response)
+
+
+@app.route('/predict-cnn', methods=['POST'])
+def predictCnn():
+    content = request.json
+    ticker = content['ticker']
+    start_date = content['start_date']
+    end_date = content['end_date']
+    look_back = 100  # Fixed look_back period
+
+    df = load_data(ticker, start_date, end_date)
+    if df.isnull().any().any():
+        df = df.dropna()  # Drop any rows with NaN values
+
+    if df.empty:
+        return jsonify({"error": "No data available for the given ticker and date range."})
+    future_days = 10
+    X, y, scaler = prepare_data(df['Close'], look_back=100)
+    predictions = cnn_model.predict(X)
     predictions_rescaled = scaler.inverse_transform(predictions)
     y_rescaled = scaler.inverse_transform(y.reshape(-1, 1))
 
@@ -207,6 +238,54 @@ def predict_garch():
         'forecast': forecast.mean.iloc[-1].values.tolist()
     })
 
+def get_data(ticker):
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="1y")  # Fetching historical data for 1 year
+    return hist['Close'].iloc[-1], hist['Close'].pct_change().dropna()  # Latest closing price and percentage changes
+
+def calculate_annualized_volatility(daily_returns):
+    # Calculate daily volatility and annualize it
+    daily_volatility = np.std(daily_returns)
+    annualized_volatility = daily_volatility * np.sqrt(252)  # Assuming 252 trading days in a year
+    return annualized_volatility
+
+def black_scholes_call(S, K, T, r, sigma):
+    # S: stock price, K: strike price, T: time to maturity, r: risk-free rate, sigma: volatility
+    S = float(S)
+    K = float(K)
+    T = float(T)
+    r = float(r)
+    sigma = float(sigma)
+    
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    call_price = (S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2))
+    return call_price
+
+
+@app.route('/black-scholes', methods=['POST'])
+def finance():
+    data = request.json
+    ticker = data['ticker']
+    K = data['strike_price']
+    r = data['risk_free_rate']
+    T = data['time_to_maturity']
+    sigma = data['volatility']
+
+    # Fetching stock price and calculating historical volatility
+    S, daily_returns = get_data(ticker)
+    if sigma == 'auto':  # Use historical volatility if 'auto' is specified
+        sigma = calculate_annualized_volatility(daily_returns)
+
+    # Calculate Black-Scholes call option price
+    call_option_price = black_scholes_call(S, K, T, r, sigma)
+    
+    return jsonify({
+        "ticker": ticker,
+        "call_option_price": call_option_price,
+        "annualized_volatility": float(sigma) * 100  # Convert to percentage
+    })
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()

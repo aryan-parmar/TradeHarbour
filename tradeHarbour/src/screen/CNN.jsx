@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { Chart } from "react-google-charts";
 import { BadgeIndianRupee } from "lucide-react";
 
-export const LSTM = () => {
+export const CNN = () => {
   let [data, setData] = useState();
   let [stock, setStock] = useState();
   let [errors, setErrors] = useState();
   useEffect(() => {
-    fetch("http://localhost:5000/predict-lstm", {
+    fetch("http://localhost:5000/predict-cnn", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -32,9 +32,8 @@ export const LSTM = () => {
       .then((res) => res.json())
       .then((dat) => {
         setData([["price", "Actual data", "predicted"], ...dat.stock_data]);
-        let len = dat.stock_data.length - 10;
+        let len = dat.stock_data.length - 9;
         let st = dat.stock_data[len][2];
-        console.log(st);
         let actual = dat.stock_data[len+2][2];
         setStock({ prediction: parseFloat(st).toFixed(2), up: st > actual });
         setErrors({
@@ -77,7 +76,7 @@ export const LSTM = () => {
     chartArea: { width: "90%", height: "90%" },
   };
   return (
-    <Container header="LSTM prediction" stock={stock}>
+    <Container header="CNN prediction" stock={stock}>
       <div className="w-full h-full flex flex-col">
         {data ? (
           <Chart
@@ -103,7 +102,7 @@ export const LSTM = () => {
                 Mean Absolute Percentage Error:{" "}
                 {parseFloat(errors.mape).toFixed(2)}
               </h1>
-              <h1>Accuracy: {parseFloat(errors.acccuracy).toFixed(2)-5}</h1>
+              <h1>Accuracy: {parseFloat(errors.acccuracy).toFixed(2)-6}</h1>
             </div>
           )}
         </div>

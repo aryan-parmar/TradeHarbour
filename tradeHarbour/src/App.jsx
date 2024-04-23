@@ -7,6 +7,8 @@ import ViewStock from "./screen/ViewStock";
 import Home from "./screen/Home";
 import { LSTM } from "./screen/LSTM";
 import SIP_calculator from "./screen/SIP_calculator";
+import { CNN } from "./screen/CNN";
+import BlackScholes from "./screen/BlackScholes";
 function App() {
   const router = createBrowserRouter([
     {
@@ -27,12 +29,12 @@ function App() {
           Component: LSTM,
         },
         {
-          path: "brownian",
-          Component: () => <div>BROWNIAN</div>,
+          path: "black-scholes",
+          Component: BlackScholes,
         },
         {
           path: "cnn",
-          Component: () => <div>CNN</div>,
+          Component: CNN,
         },
         {
           path: "sip-calculator",
