@@ -240,17 +240,15 @@ def predict_garch():
 
 def get_data(ticker):
     stock = yf.Ticker(ticker)
-    hist = stock.history(period="1y")  # Fetching historical data for 1 year
-    return hist['Close'].iloc[-1], hist['Close'].pct_change().dropna()  # Latest closing price and percentage changes
+    hist = stock.history(period="1y")
+    return hist['Close'].iloc[-1], hist['Close'].pct_change().dropna()
 
 def calculate_annualized_volatility(daily_returns):
-    # Calculate daily volatility and annualize it
     daily_volatility = np.std(daily_returns)
-    annualized_volatility = daily_volatility * np.sqrt(252)  # Assuming 252 trading days in a year
+    annualized_volatility = daily_volatility * np.sqrt(252)
     return annualized_volatility
 
 def black_scholes_call(S, K, T, r, sigma):
-    # S: stock price, K: strike price, T: time to maturity, r: risk-free rate, sigma: volatility
     S = float(S)
     K = float(K)
     T = float(T)
